@@ -100,6 +100,15 @@ export interface ActivityLog {
   action: string; // Mô tả ngắn gọn: e.g. "Đã thêm học sinh Nguyễn Văn An"
 }
 
+export interface AppUser {
+  id: string;
+  username: string; // Tên đăng nhập (chỉ chữ và số, không cần email)
+  fullName: string; // Họ và tên người dùng
+  role?: string; // Vai trò, e.g. 'Giáo viên bộ môn Tin học'
+  school?: string; // Đơn vị trường học
+  createdAt: string;
+}
+
 export interface AppData {
   classes: ClassItem[];
   students: Student[];

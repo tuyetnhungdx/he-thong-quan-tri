@@ -22,3 +22,49 @@
   background: #94a3b8;
 }
 
+/* Print Styles for PDF Export */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .no-print,
+  #main-app-header,
+  #navigation-sidebar,
+  #report-modal-overlay > div > div:first-child,
+  #report-modal-overlay > div > div:nth-child(2),
+  #report-modal-overlay > div > div:last-child {
+    display: none !important;
+  }
+
+  #report-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  #report-modal-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  #printable-report-document {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+

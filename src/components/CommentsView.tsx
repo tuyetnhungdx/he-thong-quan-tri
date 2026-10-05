@@ -9,9 +9,11 @@ import {
   Calendar,
   Tag,
   User,
-  X
+  X,
+  FileText,
 } from 'lucide-react';
 import { StudentComment, AppData } from '../types';
+import { ReportExportModal } from './ReportExportModal';
 
 interface CommentsViewProps {
   data: AppData;
@@ -31,6 +33,9 @@ export const CommentsView: React.FC<CommentsViewProps> = ({
   const [selectedClassId, setSelectedClassId] = useState(initialClassFilter);
   const [selectedSkill, setSelectedSkill] = useState<string>('ALL');
   const [search, setSearch] = useState('');
+
+  // Export PDF Modal
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -139,15 +144,28 @@ export const CommentsView: React.FC<CommentsViewProps> = ({
             Đánh giá thường xuyên quá trình phát triển các kỹ năng Tin học của học sinh THPT
           </p>
         </div>
-        <button
-          id="add-comment-btn"
-          type="button"
-          onClick={handleOpenAdd}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm shadow-blue-500/20 transition-all min-h-[44px] active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Thêm nhận xét mới</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            id="export-comments-pdf-btn"
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 hover:border-blue-400 hover:text-blue-700 text-slate-700 text-sm font-semibold shadow-2xs transition-all min-h-[44px] active:scale-95"
+            title="Xuất báo cáo nhận xét học sinh ra file PDF để in ấn và lưu trữ"
+          >
+            <FileText className="w-4 h-4 text-rose-600" />
+            <span>Xuất báo cáo (PDF)</span>
+          </button>
+
+          <button
+            id="add-comment-btn"
+            type="button"
+            onClick={handleOpenAdd}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm shadow-blue-500/20 transition-all min-h-[44px] active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Thêm nhận xét mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -436,6 +454,15 @@ export const CommentsView: React.FC<CommentsViewProps> = ({
           </div>
         </div>
       )}
+      {/* Report Export Modal (PDF) */}
+      <ReportExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        type="comments"
+        data={data}
+        initialClassId={selectedClassId}
+        teacherName="Cô Trần Thị Tuyết Nhung"
+      />
     </div>
   );
 };

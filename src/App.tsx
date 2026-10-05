@@ -13,7 +13,8 @@ import {
   LearningTask,
   GradeEntry,
   StudentComment,
-  ActivityLog
+  ActivityLog,
+  AppUser,
 } from './types';
 import {
   loadAppData,
@@ -22,6 +23,7 @@ import {
   clearAppData,
   playChime
 } from './services/storage';
+import { getCurrentUser, logoutUser } from './services/authService';
 
 // Modals & Layout
 import { Header } from './components/Header';
@@ -30,6 +32,15 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { DataManagementModal } from './components/DataManagementModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
+import { SupabaseSyncModal } from './components/SupabaseSyncModal';
+import { AuthScreen } from './components/AuthScreen';
+import {
+  checkSupabaseHealth,
+  subscribeToSupabaseChanges,
+  SupabaseStatus,
+  fetchAppDataFromSupabase,
+  pushAppDataToSupabase,
+} from './services/supabaseService';
 
 // Views
 import { OverviewView } from './components/OverviewView';
@@ -43,10 +54,22 @@ import { CommentsView } from './components/CommentsView';
 import { StatsView } from './components/StatsView';
 
 export default function App() {
+  // Authentication State (Tên đăng nhập & Mật khẩu)
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getCurrentUser());
+
   // Central Application State
   const [data, setData] = useState<AppData>(() => loadAppData());
   const [currentTab, setCurrentTab] = useState<NavTab>('overview');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Supabase Cloud State
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>({
+    isConfigured: true,
+    isConnected: false,
+    tablesExist: false,
+    missingTables: [],
+  });
 
   // Transient drill-down filters (e.g. filtering students when jumping from classes/overview)
   const [subFilter, setSubFilter] = useState<string | undefined>(undefined);
@@ -78,18 +101,6 @@ export default function App() {
     saveAppData(data);
   }, [data]);
 
-  // Keyboard shortcut: Ctrl+K or Cmd+K to trigger Quick Search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsSearchOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Toast notification dispatcher with optional sound chime
   const notify = useCallback(
     (type: 'success' | 'warning' | 'error' | 'info', title: string, description?: string) => {
@@ -115,6 +126,53 @@ export default function App() {
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // Check Supabase connectivity & tables status
+  const refreshSupabaseStatus = useCallback(async () => {
+    const status = await checkSupabaseHealth();
+    setSupabaseStatus(status);
+    return status;
+  }, []);
+
+  useEffect(() => {
+    let unsubscribeFn: (() => void) | undefined;
+    refreshSupabaseStatus().then((status) => {
+      if (status.isConnected && status.tablesExist) {
+        unsubscribeFn = subscribeToSupabaseChanges(async () => {
+          const res = await fetchAppDataFromSupabase();
+          if (res.data) {
+            setData((prev) => ({
+              ...prev,
+              ...(res.data?.classes && res.data.classes.length > 0 ? { classes: res.data.classes } : {}),
+              ...(res.data?.students && res.data.students.length > 0 ? { students: res.data.students } : {}),
+              ...(res.data?.lessons && res.data.lessons.length > 0 ? { lessons: res.data.lessons } : {}),
+              ...(res.data?.tasks && res.data.tasks.length > 0 ? { tasks: res.data.tasks } : {}),
+              ...(res.data?.grades && res.data.grades.length > 0 ? { grades: res.data.grades } : {}),
+              ...(res.data?.comments && res.data.comments.length > 0 ? { comments: res.data.comments } : {}),
+              ...(res.data?.activityLogs && res.data.activityLogs.length > 0 ? { activityLogs: res.data.activityLogs } : {}),
+            }));
+            notify('info', 'Đã cập nhật dữ liệu từ đám mây Supabase');
+          }
+        });
+      }
+    });
+
+    return () => {
+      if (unsubscribeFn) unsubscribeFn();
+    };
+  }, [refreshSupabaseStatus, notify]);
+
+  // Keyboard shortcut: Ctrl+K or Cmd+K to trigger Quick Search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Activity Log helper
   const recordActivity = (
@@ -629,15 +687,48 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Đăng xuất khỏi hệ thống',
+      message: 'Cô có chắc chắn muốn đăng xuất khỏi hệ thống trợ lý quản trị học tập không?',
+      isDestructive: false,
+      onConfirm: () => {
+        logoutUser();
+        setCurrentUser(null);
+        notify('info', 'Đã đăng xuất khỏi hệ thống');
+      },
+    });
+  };
+
+  // Nếu chưa đăng nhập, hiển thị màn hình Đăng Nhập & Đăng Ký
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-900 font-sans antialiased">
+        <AuthScreen
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+            notify('success', 'Đăng nhập thành công', `Chào mừng ${user.fullName} đến với hệ thống!`);
+          }}
+        />
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       {/* Top Application Header */}
       <Header
         data={data}
+        currentUser={currentUser}
+        supabaseStatus={supabaseStatus}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenDataModal={() => setIsDataModalOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onToggleSound={handleToggleSound}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
+        onLogout={handleLogout}
         isSidebarOpen={isMobileSidebarOpen}
       />
 
@@ -692,6 +783,20 @@ export default function App() {
         }}
         onResetSample={handleResetData}
         onClearData={handleClearData}
+        onNotify={notify}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+      />
+
+      {/* Supabase Cloud Sync Modal */}
+      <SupabaseSyncModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        status={supabaseStatus}
+        data={data}
+        onRefreshStatus={refreshSupabaseStatus}
+        onUpdateData={(newData) => {
+          setData(newData);
+        }}
         onNotify={notify}
       />
 

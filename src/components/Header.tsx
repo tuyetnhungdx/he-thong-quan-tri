@@ -1,22 +1,31 @@
 import React from 'react';
-import { Calendar, Search, Database, Volume2, VolumeX, Menu, Laptop } from 'lucide-react';
-import { AppData } from '../types';
+import { Calendar, Search, Database, Volume2, VolumeX, Menu, Laptop, Cloud, LogOut } from 'lucide-react';
+import { AppData, AppUser } from '../types';
+import { SupabaseStatus } from '../services/supabaseService';
 
 interface HeaderProps {
   data: AppData;
+  currentUser: AppUser | null;
+  supabaseStatus: SupabaseStatus;
   onOpenSearch: () => void;
   onOpenDataModal: () => void;
+  onOpenSupabaseModal: () => void;
   onToggleSound: () => void;
   onToggleMobileSidebar: () => void;
+  onLogout: () => void;
   isSidebarOpen: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   data,
+  currentUser,
+  supabaseStatus,
   onOpenSearch,
   onOpenDataModal,
+  onOpenSupabaseModal,
   onToggleSound,
   onToggleMobileSidebar,
+  onLogout,
 }) => {
   // Format Vietnamese date: e.g. "Thứ Sáu, ngày 18 tháng 09, 2026"
   const now = new Date();
@@ -52,8 +61,11 @@ export const Header: React.FC<HeaderProps> = ({
                   TRỢ LÝ QUẢN TRỊ HỌC TẬP
                 </h1>
                 <p className="text-xs sm:text-sm font-medium text-blue-700 leading-tight mt-0.5">
-                  Cô Trần Thị Tuyết Nhung <span className="text-slate-300 font-normal">|</span> Tin học{' '}
-                  <span className="text-slate-300 font-normal">|</span> THPT Nguyễn Dục
+                  {currentUser ? currentUser.fullName : 'Cô Trần Thị Tuyết Nhung'}{' '}
+                  <span className="text-slate-300 font-normal">|</span>{' '}
+                  {currentUser?.role ? currentUser.role : 'Tin học'}{' '}
+                  <span className="text-slate-300 font-normal">|</span>{' '}
+                  {currentUser?.school ? currentUser.school : 'THPT Nguyễn Dục'}
                 </p>
               </div>
             </div>
@@ -91,6 +103,56 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{formattedDate}</span>
             </div>
 
+            {/* Supabase Cloud Sync Status Button */}
+            <button
+              id="header-supabase-btn"
+              type="button"
+              onClick={onOpenSupabaseModal}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold border shadow-2xs transition-all active:scale-95 ${
+                supabaseStatus.isConnected && supabaseStatus.tablesExist
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100/80'
+                  : supabaseStatus.isConnected
+                  ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+              title={
+                supabaseStatus.isConnected && supabaseStatus.tablesExist
+                  ? 'Supabase: Đã kết nối và sẵn sàng'
+                  : supabaseStatus.isConnected
+                  ? 'Supabase: Cần khởi tạo 7 bảng dữ liệu (Bấm để xem)'
+                  : 'Supabase: Chưa kết nối'
+              }
+            >
+              <div className="relative flex items-center justify-center">
+                <Cloud
+                  className={`w-4 h-4 ${
+                    supabaseStatus.isConnected && supabaseStatus.tablesExist
+                      ? 'text-emerald-600'
+                      : supabaseStatus.isConnected
+                      ? 'text-amber-600'
+                      : 'text-slate-500'
+                  }`}
+                />
+                <span
+                  className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                    supabaseStatus.isConnected && supabaseStatus.tablesExist
+                      ? 'bg-emerald-500 ring-2 ring-emerald-200'
+                      : supabaseStatus.isConnected
+                      ? 'bg-amber-500 ring-2 ring-amber-200'
+                      : 'bg-slate-300'
+                  }`}
+                />
+              </div>
+              <span className="hidden xl:inline">
+                {supabaseStatus.isConnected && supabaseStatus.tablesExist
+                  ? 'Supabase: Sẵn sàng'
+                  : supabaseStatus.isConnected
+                  ? 'Supabase: Cần tạo bảng'
+                  : 'Supabase'}
+              </span>
+              <span className="xl:hidden hidden md:inline">Supabase</span>
+            </button>
+
             {/* Sound Toggle */}
             <button
               id="header-sound-toggle-btn"
@@ -117,6 +179,30 @@ export const Header: React.FC<HeaderProps> = ({
               <Database className="w-4 h-4 text-blue-600 shrink-0" />
               <span className="hidden sm:inline">Sao lưu dữ liệu</span>
             </button>
+
+            {/* User & Logout Button */}
+            {currentUser && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="hidden xl:flex flex-col items-end text-right">
+                  <span className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[130px]">
+                    {currentUser.fullName}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    @{currentUser.username}
+                  </span>
+                </div>
+                <button
+                  id="header-logout-btn"
+                  type="button"
+                  onClick={onLogout}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-700 hover:bg-rose-100 hover:text-rose-800 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                  title="Đăng xuất khỏi hệ thống"
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">Đăng xuất</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

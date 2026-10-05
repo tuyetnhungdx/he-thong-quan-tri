@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Trash2, Volume2, VolumeX, X, Database, ShieldCheck } from 'lucide-react';
+import { Download, Upload, RotateCcw, Trash2, Volume2, VolumeX, X, Database, ShieldCheck, Cloud } from 'lucide-react';
 import { AppData } from '../types';
 import { exportAppDataToFile, importAppDataFromFile } from '../services/storage';
 
@@ -11,6 +11,7 @@ interface DataManagementModalProps {
   onResetSample: () => void;
   onClearData: () => void;
   onNotify: (type: 'success' | 'warning' | 'error' | 'info', title: string, desc?: string) => void;
+  onOpenSupabaseModal?: () => void;
 }
 
 export const DataManagementModal: React.FC<DataManagementModalProps> = ({
@@ -21,6 +22,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   onResetSample,
   onClearData,
   onNotify,
+  onOpenSupabaseModal,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,6 +100,31 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
               Cô có thể xuất tệp JSON để chuyển sang máy tính xách tay hoặc phòng máy dễ dàng.
             </p>
           </div>
+
+          {/* Supabase Cloud Sync Card */}
+          {onOpenSupabaseModal && (
+            <div className="p-4 bg-linear-to-br from-emerald-50 to-teal-50/50 rounded-xl border border-emerald-200/90 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-emerald-950">Đồng bộ đám mây Supabase</h4>
+                  <p className="text-xs text-emerald-700">Lưu trữ trực tuyến, đồng bộ giữa nhiều máy tính</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSupabaseModal();
+                }}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all active:scale-95 shrink-0"
+              >
+                Mở Supabase →
+              </button>
+            </div>
+          )}
 
           {/* Sound Setting */}
           <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
