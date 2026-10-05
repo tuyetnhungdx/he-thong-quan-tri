@@ -1,0 +1,8 @@
+{
+  "name": "Trợ Lý Quản Trị Học Tập – Cô Trần Thị Tuyết Nhung",
+  "description": "Hệ thống quản trị học tập môn Tin học THPT dành cho Cô Trần Thị Tuyết Nhung Trường THPT Nguyễn Dục",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
