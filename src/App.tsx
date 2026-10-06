@@ -405,13 +405,33 @@ export default function App() {
   const handleAddTask = (taskData: Omit<LearningTask, 'id'>) => {
     const newTask: LearningTask = {
       ...taskData,
-      id: 'task_' + Date.now(),
+      id: 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
     };
     setData((prev) => {
       const withTask = { ...prev, tasks: [...prev.tasks, newTask] };
       return recordActivity(withTask, 'task', `Đã giao nhiệm vụ: ${newTask.title}`);
     });
     notify('success', 'Đã giao nhiệm vụ', `Nhiệm vụ "${taskData.title}" đã được tạo.`);
+  };
+
+  const handleAddTasks = (taskDataList: Omit<LearningTask, 'id'>[]) => {
+    const newTasks: LearningTask[] = taskDataList.map((t, idx) => ({
+      ...t,
+      id: 'task_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).substring(2, 6),
+    }));
+    setData((prev) => {
+      const withTasks = { ...prev, tasks: [...prev.tasks, ...newTasks] };
+      return recordActivity(
+        withTasks,
+        'task',
+        `Đã giao nhiệm vụ cho ${newTasks.length} lớp: ${newTasks[0]?.title}`
+      );
+    });
+    notify(
+      'success',
+      'Đã giao nhiệm vụ thành công',
+      `Đã tạo nhiệm vụ "${taskDataList[0]?.title}" cho ${newTasks.length} lớp học.`
+    );
   };
 
   const handleUpdateTask = (updatedTask: LearningTask) => {
@@ -648,6 +668,7 @@ export default function App() {
             initialClassFilter={subFilter && subFilter.startsWith('cls_') ? subFilter : 'ALL'}
             initialSearchQuery={subFilter && !subFilter.startsWith('cls_') ? subFilter : ''}
             onAddTask={handleAddTask}
+            onAddTasks={handleAddTasks}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
             onToggleStudentTask={handleToggleStudentTask}

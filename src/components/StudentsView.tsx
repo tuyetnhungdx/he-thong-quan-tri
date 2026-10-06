@@ -167,7 +167,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
               studentGrades.length
             ).toFixed(1)
           : 'Chưa có';
-      const assignedTasks = data.tasks.filter((t) => t.classId === st.classId);
+      const assignedTasks = data.tasks.filter(
+        (t) => t.classId === st.classId || t.classId === 'ALL'
+      );
       const completedTasks = assignedTasks.filter((t) =>
         t.completedStudentIds.includes(st.id)
       );
@@ -341,7 +343,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                       : null;
 
                   // Calculate tasks completed
-                  const assignedTasks = data.tasks.filter((t) => t.classId === st.classId);
+                  const assignedTasks = data.tasks.filter(
+                    (t) => t.classId === st.classId || t.classId === 'ALL'
+                  );
                   const completedTasks = assignedTasks.filter((t) =>
                     t.completedStudentIds.includes(st.id)
                   );

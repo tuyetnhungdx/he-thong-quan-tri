@@ -123,8 +123,8 @@ export const ClassesView: React.FC<ClassesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {data.classes.map((c) => {
             const classStudents = data.students.filter((s) => s.classId === c.id);
-            const classLessons = data.lessons.filter((l) => l.classId === c.id);
-            const classTasks = data.tasks.filter((t) => t.classId === c.id);
+            const classLessons = data.lessons.filter((l) => l.classId === c.id || l.classId === 'ALL');
+            const classTasks = data.tasks.filter((t) => t.classId === c.id || t.classId === 'ALL');
 
             return (
               <div

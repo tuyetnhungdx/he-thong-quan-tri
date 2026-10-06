@@ -36,7 +36,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ data, onNavigate }) 
   const currentTasks = useMemo(() => {
     return selectedClassId === 'ALL'
       ? data.tasks
-      : data.tasks.filter((t) => t.classId === selectedClassId);
+      : data.tasks.filter((t) => t.classId === selectedClassId || t.classId === 'ALL');
   }, [data.tasks, selectedClassId]);
 
   const currentGrades = useMemo(() => {
@@ -192,14 +192,17 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ data, onNavigate }) 
 
         <div className="space-y-4">
           {data.classes.map((cls) => {
-            const classTasks = data.tasks.filter((t) => t.classId === cls.id);
+            const classTasks = data.tasks.filter((t) => t.classId === cls.id || t.classId === 'ALL');
             const classStudents = data.students.filter((s) => s.classId === cls.id);
 
             let assigned = 0;
             let completed = 0;
             classTasks.forEach((t) => {
               assigned += classStudents.length;
-              completed += t.completedStudentIds.length;
+              const completedInThisClass = t.completedStudentIds.filter((id) =>
+                classStudents.some((cs) => cs.id === id)
+              ).length;
+              completed += completedInThisClass;
             });
 
             const percent = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
@@ -266,7 +269,9 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ data, onNavigate }) 
                   ? (grades.reduce((s, g) => s + g.score, 0) / grades.length).toFixed(1)
                   : 'Chưa có';
 
-              const assignedTasks = data.tasks.filter((t) => t.classId === st.classId);
+              const assignedTasks = data.tasks.filter(
+                (t) => t.classId === st.classId || t.classId === 'ALL'
+              );
               const unfinishedTasks = assignedTasks.filter(
                 (t) => !t.completedStudentIds.includes(st.id)
               );

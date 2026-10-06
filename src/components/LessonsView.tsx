@@ -69,7 +69,7 @@ export const LessonsView: React.FC<LessonsViewProps> = ({
   // Filtering
   const filteredLessons = useMemo(() => {
     return data.lessons.filter((l) => {
-      if (selectedClassId !== 'ALL' && l.classId !== selectedClassId) return false;
+      if (selectedClassId !== 'ALL' && l.classId !== selectedClassId && l.classId !== 'ALL') return false;
       if (statusFilter !== 'ALL' && l.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase().trim();
@@ -362,7 +362,10 @@ export const LessonsView: React.FC<LessonsViewProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredLessons.map((lesson) => {
-            const className = data.classes.find((c) => c.id === lesson.classId)?.name || 'Chưa gán';
+            const isAllClasses = lesson.classId === 'ALL';
+            const className = isAllClasses
+              ? 'Tất cả các lớp'
+              : (data.classes.find((c) => c.id === lesson.classId)?.name || 'Chưa gán');
             const relatedTasks = data.tasks.filter((t) => t.lessonId === lesson.id);
             const lessonFiles = lesson.attachments || [];
 
@@ -375,8 +378,14 @@ export const LessonsView: React.FC<LessonsViewProps> = ({
                 {/* Top Info Header */}
                 <div className="p-5 border-b border-slate-100 bg-slate-50/60">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800">
-                      Lớp {className}
+                    <span
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                        isAllClasses
+                          ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {isAllClasses ? `🌐 Tất cả các lớp (${data.classes.length} lớp)` : `Lớp ${className}`}
                     </span>
 
                     {/* Status Badge */}
@@ -608,6 +617,7 @@ export const LessonsView: React.FC<LessonsViewProps> = ({
                     onChange={(e) => setClassId(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-medium"
                   >
+                    <option value="ALL">🌐 Tất cả các lớp ({data.classes.length} lớp)</option>
                     {data.classes.map((c) => (
                       <option key={c.id} value={c.id}>
                         Lớp {c.name}

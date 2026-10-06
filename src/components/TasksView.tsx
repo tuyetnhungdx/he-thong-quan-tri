@@ -30,6 +30,7 @@ interface TasksViewProps {
   initialClassFilter?: string;
   initialSearchQuery?: string;
   onAddTask: (task: Omit<LearningTask, 'id'>) => void;
+  onAddTasks?: (tasks: Omit<LearningTask, 'id'>[]) => void;
   onUpdateTask: (task: LearningTask) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleStudentTask: (taskId: string, studentId: string) => void;
@@ -40,6 +41,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   initialClassFilter = 'ALL',
   initialSearchQuery = '',
   onAddTask,
+  onAddTasks,
   onUpdateTask,
   onDeleteTask,
   onToggleStudentTask,
@@ -54,7 +56,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Form states
   const [title, setTitle] = useState('');
-  const [classId, setClassId] = useState('');
+  const [classId, setClassId] = useState('ALL');
   const [lessonId, setLessonId] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -64,8 +66,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [formError, setFormError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // Multi-class assignment options
+  const [isMultiClassMode, setIsMultiClassMode] = useState(false);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [assignMode, setAssignMode] = useState<'single_task' | 'separate_tasks'>('single_task');
+
   // Submissions Tracker Drawer
   const [trackingTask, setTrackingTask] = useState<LearningTask | null>(null);
+  const [drawerClassFilter, setDrawerClassFilter] = useState<string>('ALL');
+  const [drawerSearch, setDrawerSearch] = useState<string>('');
 
   // Hidden direct file input ref for quick uploading to a specific task card
   const directFileInputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +83,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   // Filtering
   const filteredTasks = useMemo(() => {
     return data.tasks.filter((t) => {
-      if (selectedClassId !== 'ALL' && t.classId !== selectedClassId) return false;
+      if (selectedClassId !== 'ALL' && t.classId !== selectedClassId && t.classId !== 'ALL') return false;
       if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase().trim();
@@ -90,8 +99,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const handleOpenAdd = () => {
     setEditingTask(null);
     setTitle('');
-    const defaultClassId = data.classes[0]?.id || '';
+    const defaultClassId = selectedClassId !== 'ALL' ? selectedClassId : 'ALL';
     setClassId(defaultClassId);
+    setSelectedClassIds(data.classes.map((c) => c.id));
+    setIsMultiClassMode(false);
+    setAssignMode('single_task');
     setLessonId('');
     setDescription('');
     // Default due date: in 3 days
@@ -109,6 +121,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setEditingTask(t);
     setTitle(t.title);
     setClassId(t.classId);
+    setSelectedClassIds([t.classId]);
+    setIsMultiClassMode(false);
+    setAssignMode('single_task');
     setLessonId(t.lessonId || '');
     setDescription(t.description);
     setDueDate(t.dueDate);
@@ -233,8 +248,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
       setFormError('Vui lòng nhập tên nhiệm vụ học tập');
       return;
     }
-    if (!classId) {
+    if (!isMultiClassMode && !classId) {
       setFormError('Vui lòng chọn lớp');
+      return;
+    }
+    if (isMultiClassMode && selectedClassIds.length === 0) {
+      setFormError('Vui lòng chọn ít nhất một lớp học');
       return;
     }
     if (!dueDate) {
@@ -243,10 +262,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
 
     if (editingTask) {
+      const finalClassId = isMultiClassMode
+        ? (selectedClassIds.length === data.classes.length ? 'ALL' : (selectedClassIds[0] || 'ALL'))
+        : classId;
+
       onUpdateTask({
         ...editingTask,
         title: title.trim(),
-        classId,
+        classId: finalClassId,
         lessonId: lessonId || undefined,
         description: description.trim() || 'Nhiệm vụ rèn luyện kỹ năng Tin học',
         dueDate,
@@ -255,20 +278,72 @@ export const TasksView: React.FC<TasksViewProps> = ({
         attachments,
       });
     } else {
-      onAddTask({
-        title: title.trim(),
-        classId,
-        lessonId: lessonId || undefined,
-        description: description.trim() || 'Nhiệm vụ rèn luyện kỹ năng Tin học',
-        dueDate,
-        priority,
-        status,
-        completedStudentIds: [],
-        attachments,
-      });
+      const isAllSelected = isMultiClassMode
+        ? selectedClassIds.length === data.classes.length
+        : classId === 'ALL';
+
+      // Check if user selected "separate_tasks" when assigning to ALL or multiple classes
+      if (
+        assignMode === 'separate_tasks' &&
+        (isAllSelected || (isMultiClassMode && selectedClassIds.length > 1))
+      ) {
+        const targetClasses = isMultiClassMode
+          ? data.classes.filter((c) => selectedClassIds.includes(c.id))
+          : data.classes;
+
+        const tasksToCreate: Omit<LearningTask, 'id'>[] = targetClasses.map((cls) => ({
+          title: title.trim(),
+          classId: cls.id,
+          lessonId: lessonId || undefined,
+          description: description.trim() || 'Nhiệm vụ rèn luyện kỹ năng Tin học',
+          dueDate,
+          priority,
+          status,
+          completedStudentIds: [],
+          attachments,
+        }));
+
+        if (onAddTasks) {
+          onAddTasks(tasksToCreate);
+        } else {
+          tasksToCreate.forEach((t) => onAddTask(t));
+        }
+      } else {
+        const finalClassId = isMultiClassMode
+          ? (isAllSelected ? 'ALL' : selectedClassIds[0])
+          : classId;
+
+        onAddTask({
+          title: title.trim(),
+          classId: finalClassId,
+          lessonId: lessonId || undefined,
+          description: description.trim() || 'Nhiệm vụ rèn luyện kỹ năng Tin học',
+          dueDate,
+          priority,
+          status,
+          completedStudentIds: [],
+          attachments,
+        });
+      }
     }
 
     setIsModalOpen(false);
+  };
+
+  const handleBatchToggle = (task: LearningTask, studentIds: string[], markAsDone: boolean) => {
+    let updatedIds = [...task.completedStudentIds];
+    if (markAsDone) {
+      const set = new Set([...updatedIds, ...studentIds]);
+      updatedIds = Array.from(set);
+    } else {
+      const removeSet = new Set(studentIds);
+      updatedIds = updatedIds.filter((id) => !removeSet.has(id));
+    }
+    const updatedTask = { ...task, completedStudentIds: updatedIds };
+    onUpdateTask(updatedTask);
+    if (trackingTask && trackingTask.id === task.id) {
+      setTrackingTask(updatedTask);
+    }
   };
 
   const handleQuickStatusChange = (task: LearningTask, newStatus: TaskStatus) => {
@@ -369,9 +444,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
       ) : (
         <div className="space-y-4">
           {filteredTasks.map((task) => {
-            const className = data.classes.find((c) => c.id === task.classId)?.name || 'Chung';
+            const isAllClasses = task.classId === 'ALL';
+            const className = isAllClasses
+              ? 'Tất cả các lớp'
+              : (data.classes.find((c) => c.id === task.classId)?.name || 'Chung');
             const relatedLesson = data.lessons.find((l) => l.id === task.lessonId);
-            const classStudents = data.students.filter((s) => s.classId === task.classId);
+            const classStudents = isAllClasses
+              ? data.students
+              : data.students.filter((s) => s.classId === task.classId);
             const completedCount = task.completedStudentIds.length;
             const percent =
               classStudents.length > 0 ? Math.round((completedCount / classStudents.length) * 100) : 0;
@@ -386,8 +466,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 {/* Left: Task info */}
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800">
-                      Lớp {className}
+                    <span
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                        isAllClasses
+                          ? 'bg-purple-100 text-purple-900 border border-purple-200 shadow-2xs'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {isAllClasses ? `🌐 Tất cả các lớp (${data.classes.length} lớp)` : `Lớp ${className}`}
                     </span>
 
                     {/* Priority Badge */}
@@ -615,22 +701,95 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Lớp <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={classId}
-                    onChange={(e) => setClassId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-medium"
-                  >
-                    {data.classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        Lớp {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Lớp <span className="text-rose-500">*</span>
+                    </label>
+                    {!editingTask && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMode = !isMultiClassMode;
+                          setIsMultiClassMode(nextMode);
+                          if (nextMode) {
+                            setSelectedClassIds(classId === 'ALL' ? data.classes.map((c) => c.id) : [classId]);
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        {isMultiClassMode ? 'Chọn 1 lớp / tất cả' : 'Chọn nhiều lớp...'}
+                      </button>
+                    )}
+                  </div>
+
+                  {!isMultiClassMode ? (
+                    <select
+                      value={classId}
+                      onChange={(e) => setClassId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-medium bg-white"
+                    >
+                      <option value="ALL">🌐 Tất cả các lớp ({data.classes.length} lớp)</option>
+                      {data.classes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          Lớp {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-blue-100 text-xs">
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-blue-900 select-none">
+                          <input
+                            type="checkbox"
+                            checked={selectedClassIds.length === data.classes.length && data.classes.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClassIds(data.classes.map((c) => c.id));
+                              } else {
+                                setSelectedClassIds([]);
+                              }
+                            }}
+                            className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span>Chọn tất cả các lớp ({data.classes.length})</span>
+                        </label>
+                        <span className="text-[11px] text-blue-700 font-semibold">
+                          Đã chọn {selectedClassIds.length}/{data.classes.length}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                        {data.classes.map((c) => {
+                          const isChecked = selectedClassIds.includes(c.id);
+                          return (
+                            <label
+                              key={c.id}
+                              className={`flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
+                                isChecked
+                                  ? 'bg-blue-100/70 border-blue-300 font-bold text-blue-900'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedClassIds((prev) => [...prev, c.id]);
+                                  } else {
+                                    setSelectedClassIds((prev) => prev.filter((id) => id !== c.id));
+                                  }
+                                }}
+                                className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span>Lớp {c.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -640,19 +799,88 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <select
                     value={lessonId}
                     onChange={(e) => setLessonId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 text-xs"
+                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 text-xs bg-white"
                   >
                     <option value="">-- Không gắn bài học --</option>
                     {data.lessons
-                      .filter((l) => !classId || l.classId === classId)
+                      .filter(
+                        (l) =>
+                          !classId ||
+                          classId === 'ALL' ||
+                          isMultiClassMode ||
+                          l.classId === classId ||
+                          l.classId === 'ALL'
+                      )
                       .map((l) => (
                         <option key={l.id} value={l.id}>
-                          {l.title}
+                          {l.title}{' '}
+                          {(classId === 'ALL' || isMultiClassMode) && l.classId !== 'ALL'
+                            ? `(Lớp ${data.classes.find((c) => c.id === l.classId)?.name || 'Chung'})`
+                            : ''}
                         </option>
                       ))}
                   </select>
                 </div>
               </div>
+
+              {/* Informative helper & mode choice when assigning to ALL or multiple classes */}
+              {!editingTask &&
+                ((!isMultiClassMode && classId === 'ALL') ||
+                  (isMultiClassMode &&
+                    (selectedClassIds.length === data.classes.length || selectedClassIds.length > 1))) && (
+                  <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 text-xs text-slate-800 space-y-2.5 animate-in fade-in">
+                    <div className="flex items-center gap-2 font-bold text-blue-900">
+                      <span className="text-sm">✨</span>
+                      <span>
+                        {(!isMultiClassMode && classId === 'ALL') ||
+                        selectedClassIds.length === data.classes.length
+                          ? `Giao cho toàn bộ ${data.classes.length} lớp học (${data.students.length} học sinh)`
+                          : `Giao cho ${selectedClassIds.length} lớp đã chọn`}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 pt-1.5 border-t border-blue-200/60">
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="assignMode"
+                          value="single_task"
+                          checked={assignMode === 'single_task'}
+                          onChange={() => setAssignMode('single_task')}
+                          className="mt-0.5 text-blue-600 cursor-pointer"
+                        />
+                        <div className="text-xs">
+                          <span className="font-bold text-slate-900">
+                            Tạo 1 nhiệm vụ chung cho tất cả các lớp (Khuyên dùng)
+                          </span>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Tất cả học sinh các lớp đều nộp bài vào nhiệm vụ này, tiện chỉnh sửa hạn và tệp đính kèm tập trung một nơi.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="assignMode"
+                          value="separate_tasks"
+                          checked={assignMode === 'separate_tasks'}
+                          onChange={() => setAssignMode('separate_tasks')}
+                          className="mt-0.5 text-blue-600 cursor-pointer"
+                        />
+                        <div className="text-xs">
+                          <span className="font-bold text-slate-900">
+                            Tạo riêng từng nhiệm vụ độc lập cho mỗi lớp
+                          </span>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Hệ thống sẽ tự động nhân bản thành{' '}
+                            {isMultiClassMode ? selectedClassIds.length : data.classes.length} nhiệm vụ riêng để có thể linh hoạt điều chỉnh hạn nộp riêng cho từng lớp.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -797,96 +1025,213 @@ export const TasksView: React.FC<TasksViewProps> = ({
           onClick={() => setTrackingTask(null)}
         >
           <div
-            className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]"
+            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <div>
-                <h3 className="font-bold text-slate-900 text-base leading-tight">
-                  Tiến độ nộp bài: {trackingTask.title}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Lớp: <strong className="text-slate-800">{data.classes.find((c) => c.id === trackingTask.classId)?.name}</strong> • Hạn: {trackingTask.dueDate}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTrackingTask(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {(() => {
+              const isAll = trackingTask.classId === 'ALL';
+              const targetStudents = isAll
+                ? data.students
+                : data.students.filter((s) => s.classId === trackingTask.classId);
 
-            {/* List of students in that class */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-2">
-              {(() => {
-                const classStudents = data.students.filter((s) => s.classId === trackingTask.classId);
-                if (classStudents.length === 0) {
-                  return (
-                    <p className="text-center py-8 text-xs text-slate-400">
-                      Lớp này chưa có danh sách học sinh.
-                    </p>
-                  );
+              const displayedStudents = targetStudents.filter((st) => {
+                if (isAll && drawerClassFilter !== 'ALL' && st.classId !== drawerClassFilter) return false;
+                if (drawerSearch.trim()) {
+                  const q = drawerSearch.toLowerCase().trim();
+                  return st.fullName.toLowerCase().includes(q) || st.studentCode.toLowerCase().includes(q);
                 }
+                return true;
+              });
 
-                return classStudents.map((st) => {
-                  const isDone = trackingTask.completedStudentIds.includes(st.id);
+              const completedInDisplayed = displayedStudents.filter((st) =>
+                trackingTask.completedStudentIds.includes(st.id)
+              ).length;
 
-                  return (
-                    <div
-                      key={st.id}
-                      onClick={() => onToggleStudentTask(trackingTask.id, st.id)}
-                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                        isDone
-                          ? 'bg-emerald-50/70 border-emerald-200 hover:bg-emerald-100/60'
-                          : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
-                            isDone ? 'bg-emerald-600 text-white' : 'border border-slate-300 text-transparent'
-                          }`}
-                        >
-                          ✓
-                        </div>
-                        <div>
-                          <p className={`text-sm font-semibold ${isDone ? 'text-emerald-950 font-bold' : 'text-slate-800'}`}>
-                            {st.fullName}
-                          </p>
-                          <span className="text-xs text-slate-400 font-mono">Mã: {st.studentCode}</span>
+              return (
+                <>
+                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 pr-4">
+                        <h3 className="font-bold text-slate-900 text-base leading-tight truncate">
+                          Tiến độ nộp bài: {trackingTask.title}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                          <span>
+                            Lớp:{' '}
+                            {isAll ? (
+                              <strong className="text-purple-700 font-bold">
+                                🌐 Tất cả các lớp ({data.classes.length} lớp • {data.students.length} HS)
+                              </strong>
+                            ) : (
+                              <strong className="text-slate-800">
+                                Lớp {data.classes.find((c) => c.id === trackingTask.classId)?.name || 'Chung'}
+                              </strong>
+                            )}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Hạn hoàn thành: <strong className="text-slate-800">{trackingTask.dueDate}</strong>
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTrackingTask(null)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Controls row: Filter by class (if ALL), search, and bulk buttons */}
+                    <div className="mt-3.5 pt-3 border-t border-slate-200/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 flex-1">
+                        {isAll && (
+                          <select
+                            value={drawerClassFilter}
+                            onChange={(e) => setDrawerClassFilter(e.target.value)}
+                            className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 focus:outline-none"
+                          >
+                            <option value="ALL">Tất cả lớp ({data.students.length})</option>
+                            {data.classes.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                Lớp {c.name} ({data.students.filter((s) => s.classId === c.id).length})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        <div className="relative flex-1">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={drawerSearch}
+                            onChange={(e) => setDrawerSearch(e.target.value)}
+                            placeholder="Tìm học sinh theo tên, mã..."
+                            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-600"
+                          />
                         </div>
                       </div>
 
-                      <span
-                        className={`text-xs font-bold px-2.5 py-1 rounded-md ${
-                          isDone
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {isDone ? 'Đã nộp bài' : 'Chưa nộp'}
-                      </span>
+                      <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+                        <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                          {completedInDisplayed}/{displayedStudents.length} đã nộp
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleBatchToggle(
+                                trackingTask,
+                                displayedStudents.map((s) => s.id),
+                                true
+                              )
+                            }
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md text-[11px] font-bold transition-colors"
+                            title="Đánh dấu tất cả học sinh đang hiển thị là đã nộp bài"
+                          >
+                            ✓ Đã nộp tất cả
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleBatchToggle(
+                                trackingTask,
+                                displayedStudents.map((s) => s.id),
+                                false
+                              )
+                            }
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-md text-[11px] font-bold transition-colors"
+                            title="Bỏ đánh dấu đã nộp cho tất cả học sinh đang hiển thị"
+                          >
+                            Bỏ chọn
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  );
-                });
-              })()}
-            </div>
+                  </div>
 
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs text-slate-500">
-                Bấm vào dòng học sinh để chuyển đổi trạng thái nộp bài tức thời.
-              </span>
-              <button
-                type="button"
-                onClick={() => setTrackingTask(null)}
-                className="px-4 py-1.5 bg-white border border-slate-200 text-xs font-bold rounded-lg text-slate-700 hover:bg-slate-50 shadow-2xs"
-              >
-                Đóng
-              </button>
-            </div>
+                  {/* List of students */}
+                  <div className="p-6 overflow-y-auto flex-1 space-y-2">
+                    {displayedStudents.length === 0 ? (
+                      <div className="text-center py-10 text-slate-400">
+                        <p className="text-xs">
+                          {drawerSearch || drawerClassFilter !== 'ALL'
+                            ? 'Không tìm thấy học sinh nào phù hợp với bộ lọc.'
+                            : 'Chưa có danh sách học sinh cho mục này.'}
+                        </p>
+                      </div>
+                    ) : (
+                      displayedStudents.map((st) => {
+                        const isDone = trackingTask.completedStudentIds.includes(st.id);
+                        const stClassName = data.classes.find((c) => c.id === st.classId)?.name;
+
+                        return (
+                          <div
+                            key={st.id}
+                            onClick={() => onToggleStudentTask(trackingTask.id, st.id)}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                              isDone
+                                ? 'bg-emerald-50/70 border-emerald-200 hover:bg-emerald-100/60'
+                                : 'bg-white border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                                  isDone ? 'bg-emerald-600 text-white' : 'border border-slate-300 text-transparent'
+                                }`}
+                              >
+                                ✓
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p
+                                    className={`text-sm truncate ${
+                                      isDone ? 'text-emerald-950 font-bold' : 'text-slate-800 font-semibold'
+                                    }`}
+                                  >
+                                    {st.fullName}
+                                  </p>
+                                  {isAll && stClassName && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80 shrink-0">
+                                      Lớp {stClassName}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-slate-400 font-mono">Mã: {st.studentCode}</span>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`text-xs font-bold px-2.5 py-1 rounded-md shrink-0 ${
+                                isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {isDone ? 'Đã nộp bài' : 'Chưa nộp'}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      Bấm vào từng học sinh để đổi trạng thái nộp bài hoặc dùng nút thao tác nhanh ở trên.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTrackingTask(null)}
+                      className="px-4 py-1.5 bg-white border border-slate-200 text-xs font-bold rounded-lg text-slate-700 hover:bg-slate-50 shadow-2xs"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

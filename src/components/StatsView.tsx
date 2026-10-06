@@ -40,12 +40,15 @@ export const StatsView: React.FC<StatsViewProps> = ({ data, onNavigate }) => {
       const lessonRate =
         lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
 
-      const tasks = data.tasks.filter((t) => t.classId === cls.id);
+      const tasks = data.tasks.filter((t) => t.classId === cls.id || t.classId === 'ALL');
       let totalSlots = 0;
       let completedSlots = 0;
       tasks.forEach((t) => {
         totalSlots += students.length;
-        completedSlots += t.completedStudentIds.length;
+        const completedInThisClass = t.completedStudentIds.filter((id) =>
+          students.some((st) => st.id === id)
+        ).length;
+        completedSlots += completedInThisClass;
       });
       const taskRate = totalSlots > 0 ? Math.round((completedSlots / totalSlots) * 100) : 0;
 
